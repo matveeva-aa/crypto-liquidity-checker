@@ -8,29 +8,32 @@
     body {
       font-family: sans-serif;
       padding: 2rem;
+      max-width: 800px;
+      margin: auto;
     }
     input, button {
       font-size: 1rem;
-      padding: 0.4rem;
+      padding: 0.5rem;
       margin-top: 0.5rem;
+      width: 100%;
     }
     pre {
       margin-top: 1rem;
       background: #f5f5f5;
       padding: 1rem;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
+    span.green { color: green; }
+    span.red { color: red; }
   </style>
   <script>
+    const server = 'https://liquidity-api-qkhg.onrender.com';
+
     async function fetchData() {
       const contract = document.getElementById('contract').value.trim();
       const output = document.getElementById('output');
       output.textContent = 'Загрузка...';
-
-      // 👉 Локальный сервер (если тестируешь локально)
-      const server = 'http://127.0.0.1:5000';
-
-      // ⚠️ Если используешь Render, замени строку выше на:
-      // const server = 'https://название-приложения.onrender.com';
 
       if (!contract) {
         output.textContent = '❗ Пожалуйста, вставьте адрес контракта';
@@ -59,17 +62,22 @@
         const topBid = bids[0][0];
         const bottomBid = bids[15][0];
 
-        const spreadPercent = (((topBid - bottomBid) / bottomBid) * 100).toFixed(2);
+        const spread = ((topBid - bottomBid) / bottomBid) * 100;
+        const spreadText = spread.toFixed(2).replace('.', ',');
+
         const formulaText = `( ${topBid} - ${bottomBid} ) / ${bottomBid} × 100`;
 
         const liquidity = bids
                 .slice(0, 16)
                 .reduce((sum, [p, q]) => sum + p * q, 0)
-                .toFixed(2);
+                .toFixed(2)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, `'`);
 
-        const dailyVol = parseFloat(ticker?.quoteVolume || 0).toFixed(0);
+        const dailyVol = parseFloat(ticker?.quoteVolume || 0)
+                .toFixed(0)
+                .replace(/\B(?=(\d{3})+(?!\d))/g, `'`);
 
-        const spreadColor = parseFloat(spreadPercent) <= 10 ? 'green' : 'red';
+        const spreadColor = Math.abs(spread) <= 10 ? 'green' : 'red';
         const liquidityColor = liquidity >= 3000 ? 'green' : 'red';
         const volumeColor = dailyVol >= 10000 ? 'green' : 'red';
 
@@ -78,25 +86,26 @@
           <div><strong>Макс. ордер на покупку:</strong> ${topBid}</div>
           <div><strong>Мин. ордер на покупку:</strong> ${bottomBid}</div>
           <div><strong>Формула:</strong> ${formulaText}</div>
-          <div><strong>Разница в %:</strong> <span style="color: ${spreadColor}">${spreadPercent}%</span></div>
-          <div><strong>Ликвидность 1–16 ордеров (покупка):</strong> <span style="color: ${liquidityColor}">${liquidity} USDT</span></div>
-          <div><strong>Объем за сутки:</strong> <span style="color: ${volumeColor}">${dailyVol} USDT</span></div>
+          <div><strong>Разница в %:</strong> <span class="${spreadColor}">${spreadText}%</span></div>
+          <div><strong>Ликвидность 1–16 ордеров (покупка):</strong> <span class="${liquidityColor}">${liquidity} USDT</span></div>
+          <div><strong>Объем за сутки:</strong> <span class="${volumeColor}">${dailyVol} USDT</span></div>
         `;
       } catch (e) {
         output.textContent = '⚠️ Ошибка: ' + e.message;
       }
     }
 
-    // Обработка Enter
     window.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') fetchData();
+      if (e.key === 'Enter') {
+        fetchData();
+      }
     });
   </script>
 </head>
 <body>
 <h2>Проверка ликвидности токена</h2>
-<label>Адрес контракта (Ethereum):</label><br />
-<input id="contract" type="text" size="60" placeholder="0x..." />
+<label>Адрес контракта (Ethereum):</label>
+<input id="contract" type="text" placeholder="0x..." />
 <button onclick="fetchData()">Проверить</button>
 <pre id="output"></pre>
 </body>
