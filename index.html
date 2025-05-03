@@ -1,68 +1,103 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Проверка ликвидности токена</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+    }
+    input, button {
+      font-size: 1rem;
+      padding: 0.4rem;
+      margin-top: 0.5rem;
+    }
+    pre {
+      margin-top: 1rem;
+      background: #f5f5f5;
+      padding: 1rem;
+    }
+  </style>
   <script>
     async function fetchData() {
       const contract = document.getElementById('contract').value.trim();
       const output = document.getElementById('output');
       output.textContent = 'Загрузка...';
 
-      try {
-        // Проверяем, если поле пустое, выводим сообщение
-        if (!contract) {
-          output.textContent = 'Пожалуйста, вставьте адрес контракта';
-          return;
-        }
+      // 👉 Локальный сервер (если тестируешь локально)
+      const server = 'http://127.0.0.1:5000';
 
-        const symbolRes = await fetch(`https://api.mexc.com/api/v2/contract/${contract}`);
+      // ⚠️ Если используешь Render, замени строку выше на:
+      // const server = 'https://название-приложения.onrender.com';
+
+      if (!contract) {
+        output.textContent = '❗ Пожалуйста, вставьте адрес контракта';
+        return;
+      }
+
+      try {
+        const symbolRes = await fetch(`${server}/get_symbol?address=${contract}`);
         if (!symbolRes.ok) {
-          output.textContent = 'Пара не найдена. Пожалуйста, вставьте правильный адрес контракта или ссылку на MEXC.';
+          output.textContent = '❌ Пара не найдена. Вставьте правильный адрес контракта или ссылку на MEXC.';
           return;
         }
 
         const symbolData = await symbolRes.json();
         const symbol = symbolData.symbol.toUpperCase();
 
-        const orderbookRes = await fetch(`https://api.mexc.com/api/v2/orderbook/${symbol}`);
+        const orderbookRes = await fetch(`${server}/get_orderbook?symbol=${symbol}`);
         const { depth, ticker } = await orderbookRes.json();
 
-        const bids = depth.bids.map(([p, q]) => [parseFloat(p), parseFloat(q)]);
+        const bids = (depth?.bids || []).map(([p, q]) => [parseFloat(p), parseFloat(q)]);
+        if (bids.length < 16) {
+          output.textContent = 'Недостаточно данных в стакане для анализа.';
+          return;
+        }
 
-        // Возьмем первый и 16-й ордера на покупку
-        const topBid = bids[0]?.[0] || 0;
-        const bottomBid = bids[15]?.[0] || 0;
+        const topBid = bids[0][0];
+        const bottomBid = bids[15][0];
 
         const spreadPercent = (((topBid - bottomBid) / bottomBid) * 100).toFixed(2);
-        const formulaText = `(${topBid} - ${bottomBid}) / ${bottomBid} × 100 = ${spreadPercent}%`;
+        const formulaText = `( ${topBid} - ${bottomBid} ) / ${bottomBid} × 100`;
 
-        const bidLiquidityUSDT = bids.reduce((acc, [p, q]) => acc + p * q, 0).toFixed(2);
-        const dailyVol = parseFloat(ticker.quoteVolume).toFixed(0);
+        const liquidity = bids
+                .slice(0, 16)
+                .reduce((sum, [p, q]) => sum + p * q, 0)
+                .toFixed(2);
 
-        const color = Math.abs(spreadPercent) <= 10 ? 'green' : 'red';
+        const dailyVol = parseFloat(ticker?.quoteVolume || 0).toFixed(0);
+
+        const spreadColor = parseFloat(spreadPercent) <= 10 ? 'green' : 'red';
+        const liquidityColor = liquidity >= 3000 ? 'green' : 'red';
+        const volumeColor = dailyVol >= 10000 ? 'green' : 'red';
 
         output.innerHTML = `
           <div><strong>Пара:</strong> ${symbol} / USDT</div>
-          <div><strong>Формула:</strong> ${formulaText}</div>
           <div><strong>Макс. ордер на покупку:</strong> ${topBid}</div>
           <div><strong>Мин. ордер на покупку:</strong> ${bottomBid}</div>
-          <div><strong>Разница между ними:</strong> <span style="color: ${color}">${spreadPercent}%</span></div>
-          <div><strong>Ликвидность всего стакана (покупка):</strong> ${bidLiquidityUSDT} USDT</div>
-          <div><strong>Объем за сутки:</strong> ${dailyVol} USDT</div>
+          <div><strong>Формула:</strong> ${formulaText}</div>
+          <div><strong>Разница в %:</strong> <span style="color: ${spreadColor}">${spreadPercent}%</span></div>
+          <div><strong>Ликвидность 1–16 ордеров (покупка):</strong> <span style="color: ${liquidityColor}">${liquidity} USDT</span></div>
+          <div><strong>Объем за сутки:</strong> <span style="color: ${volumeColor}">${dailyVol} USDT</span></div>
         `;
       } catch (e) {
-        output.textContent = 'Ошибка: ' + e.message;
+        output.textContent = '⚠️ Ошибка: ' + e.message;
       }
     }
+
+    // Обработка Enter
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') fetchData();
+    });
   </script>
 </head>
-<body style="font-family: sans-serif; padding: 2rem;">
+<body>
 <h2>Проверка ликвидности токена</h2>
-<label>Адрес контракта (Ethereum):</label><br>
+<label>Адрес контракта (Ethereum):</label><br />
 <input id="contract" type="text" size="60" placeholder="0x..." />
 <button onclick="fetchData()">Проверить</button>
-<pre id="output" style="margin-top: 1rem; background: #f5f5f5; padding: 1rem;"></pre>
+<pre id="output"></pre>
 </body>
 </html>
