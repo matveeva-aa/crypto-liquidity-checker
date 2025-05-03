@@ -11,11 +11,15 @@
       max-width: 800px;
       margin: auto;
     }
-    input, button {
+    input {
       font-size: 1rem;
-      padding: 0.5rem;
-      margin-top: 0.5rem;
-      width: 100%;
+      padding: 0.4rem;
+      width: 60%;
+    }
+    button {
+      font-size: 1rem;
+      padding: 0.4rem 1rem;
+      margin-left: 0.5rem;
     }
     pre {
       margin-top: 1rem;
@@ -31,17 +35,30 @@
     const server = 'https://liquidity-api-qkhg.onrender.com';
 
     async function fetchData() {
-      const contract = document.getElementById('contract').value.trim();
+      const contractInput = document.getElementById('contract').value.trim();
       const output = document.getElementById('output');
       output.textContent = 'Загрузка...';
 
-      if (!contract) {
-        output.textContent = '❗ Пожалуйста, вставьте адрес контракта';
+      if (!contractInput) {
+        output.textContent = '❗ Пожалуйста, вставьте адрес контракта или ссылку на пару';
         return;
       }
 
+      const isLink = contractInput.includes('mexc.com');
+      let address = '';
+      if (isLink) {
+        const parts = contractInput.split('/exchange/')[1];
+        if (!parts) {
+          output.textContent = '❗ Неверный формат ссылки на MEXC.';
+          return;
+        }
+        address = parts.split('_')[0].toLowerCase();
+      } else {
+        address = contractInput;
+      }
+
       try {
-        const symbolRes = await fetch(`${server}/get_symbol?address=${contract}`);
+        const symbolRes = await fetch(`${server}/get_symbol?address=${address}`);
         if (!symbolRes.ok) {
           output.textContent = '❌ Пара не найдена. Вставьте правильный адрес контракта или ссылку на MEXC.';
           return;
@@ -71,11 +88,11 @@
                 .slice(0, 16)
                 .reduce((sum, [p, q]) => sum + p * q, 0)
                 .toFixed(2)
-                .replace(/\B(?=(\d{3})+(?!\d))/g, `'`);
+                .replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 
         const dailyVol = parseFloat(ticker?.quoteVolume || 0)
                 .toFixed(0)
-                .replace(/\B(?=(\d{3})+(?!\d))/g, `'`);
+                .replace(/\B(?=(\d{3})+(?!\d))/g, "'");
 
         const spreadColor = Math.abs(spread) <= 10 ? 'green' : 'red';
         const liquidityColor = liquidity >= 3000 ? 'green' : 'red';
@@ -104,8 +121,8 @@
 </head>
 <body>
 <h2>Проверка ликвидности токена</h2>
-<label>Адрес контракта (Ethereum):</label>
-<input id="contract" type="text" placeholder="0x..." />
+<label>Контракт или ссылка на пару (MEXC):</label><br />
+<input id="contract" type="text" placeholder="0x... или https://mexc.com/ru-RU/exchange/SHIRO_USDT" />
 <button onclick="fetchData()">Проверить</button>
 <pre id="output"></pre>
 </body>
